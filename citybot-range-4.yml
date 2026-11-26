@@ -1,0 +1,63 @@
+# =============================================================================
+# CityBot Mobility - Range REDUIT pour la demo du 27/11 (4 machines Linux)
+# -----------------------------------------------------------------------------
+# FLOTTE-TLM, VEHICULES-SIM   -> VLAN 30 (flotte)
+# APP-RESA, DB-CLIENTS        -> VLAN 20 (applications et donnees)
+#
+# Pas de bloc network : les deux flux de la demo sont INTRA-VLAN
+#   - VEHICULES-SIM (30) -> FLOTTE-TLM (30)   : meme VLAN
+#   - APP-RESA (20)      -> DB-CLIENTS (20)   : meme VLAN
+# donc aucune regle inter-VLAN n'est necessaire.
+#
+# Schema conforme a docs.ludus.cloud/docs/configuration (verifie le 26/11).
+# RAM volontairement reduite (instance de 15,6 Gio) : total ici ~7 Gio.
+# =============================================================================
+ludus:
+  - vm_name: "{{ range_id }}-APP-RESA"
+    hostname: "APP-RESA"
+    template: debian-13-x64-server-template
+    vlan: 20
+    ip_last_octet: 11
+    ram_gb: 1
+    cpus: 1
+    linux: true
+    testing:
+      snapshot: true
+      block_internet: false
+
+  - vm_name: "{{ range_id }}-DB-CLIENTS"
+    hostname: "DB-CLIENTS"
+    template: debian-13-x64-server-template
+    vlan: 20
+    ip_last_octet: 12
+    ram_gb: 2
+    cpus: 1
+    linux: true
+    testing:
+      snapshot: true
+      block_internet: false
+
+  - vm_name: "{{ range_id }}-FLOTTE-TLM"
+    hostname: "FLOTTE-TLM"
+    template: debian-13-x64-server-template
+    vlan: 30
+    ip_last_octet: 11
+    ram_gb: 1
+    cpus: 1
+    linux: true
+    testing:
+      snapshot: true
+      block_internet: false
+
+  # VEHICULES-SIM fait tourner Docker : on lui laisse 2 Gio.
+  - vm_name: "{{ range_id }}-VEHICULES-SIM"
+    hostname: "VEHICULES-SIM"
+    template: debian-13-x64-server-template
+    vlan: 30
+    ip_last_octet: 12
+    ram_gb: 2
+    cpus: 2
+    linux: true
+    testing:
+      snapshot: true
+      block_internet: false
