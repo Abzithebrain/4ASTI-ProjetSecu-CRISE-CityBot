@@ -1,0 +1,15 @@
+[Unit]
+Description=CityBot - telemetrie et ordres de mission
+After=network.target
+[Service]
+Type=simple
+User=citybot
+WorkingDirectory=/opt/citybot/flotte
+Environment=CITYBOT_LOG={{ citybot_log_dir }}/flotte-tlm.json
+Environment=VEH_KEYS={% for k,v in vehicule_api_keys.items() %}{{ k }}={{ v }}{% if not loop.last %},{% endif %}{% endfor %}
+
+Environment=VEH_IPS=VEH-001={{ ip_vehicules_sim }},VEH-002={{ ip_vehicules_sim }},VEH-003={{ ip_vehicules_sim }}
+ExecStart=/opt/citybot/venv/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 flotte:app
+Restart=always
+[Install]
+WantedBy=multi-user.target

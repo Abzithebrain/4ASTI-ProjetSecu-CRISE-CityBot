@@ -1,0 +1,7 @@
+---
+# Collections Ansible necessaires. A installer sur l'hote Ludus :
+#   ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: community.postgresql
+  - name: community.docker
+  - name: ansible.posix

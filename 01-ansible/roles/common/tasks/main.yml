@@ -1,0 +1,59 @@
+---
+- name: Paquets de base
+  ansible.builtin.apt:
+    name: [curl, jq, vim, python3, python3-venv, python3-pip, chrony, rsync, ca-certificates]
+    state: present
+    update_cache: true
+  register: apt_common
+  retries: 3
+  delay: 10
+  until: apt_common is succeeded
+
+- name: Synchronisation du temps (indispensable pour correler les journaux ELK)
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Repertoire des journaux CityBot
+  ansible.builtin.file:
+    path: "{{ citybot_log_dir }}"
+    state: directory
+    owner: root
+    group: adm
+    mode: "0775"
+
+- name: Rotation des journaux applicatifs
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/citybot
+    mode: "0644"
+    content: |
+      {{ citybot_log_dir }}/*.json {
+        daily
+        rotate 7
+        compress
+        missingok
+        notifempty
+        copytruncate
+      }
+
+- name: Table des hotes du range (les services se parlent par nom)
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} CITYBOT"
+    block: |
+      {{ ip_app_resa }}       app-resa.citybot.lab app-resa
+      {{ ip_db_clients }}     db-clients.citybot.lab db-clients
+      {{ ip_backup }}         backup.citybot.lab backup
+      {{ ip_flotte_tlm }}     flotte-tlm.citybot.lab flotte-tlm
+      {{ ip_vehicules_sim }}  vehicules-sim.citybot.lab vehicules-sim
+      {{ ip_tiers_editeur }}  tiers-editeur.citybot.lab tiers-editeur
+      {{ ip_tiers_paiement }} tiers-paiement.citybot.lab tiers-paiement
+      {{ ip_kali }}           kali.citybot.lab kali
+
+- name: Journalisation systemd persistante (sinon tout est perdu au reboot)
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/journald.conf
+    regexp: '^#?Storage='
+    line: 'Storage=persistent'
+  notify: restart journald

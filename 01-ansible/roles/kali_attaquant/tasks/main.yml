@@ -1,0 +1,31 @@
+---
+# KALI : poste d'animation. On installe seulement de quoi lancer les injects.
+- name: Outils d'animation
+  ansible.builtin.apt:
+    name: [curl, jq, postgresql-client, openssh-client, python3]
+    state: present
+    update_cache: true
+
+- name: Repertoire d'animation
+  ansible.builtin.file: { path: /opt/animation, state: directory, mode: "0755" }
+
+- name: Deposer les scripts d'injects
+  ansible.builtin.copy:
+    src: injects/
+    dest: /opt/animation/injects/
+    mode: "0755"
+
+- name: Variables d'environnement des injects
+  ansible.builtin.template: { src: injects.env.j2, dest: /opt/animation/injects.env, mode: "0644" }
+
+- name: Note d'animation
+  ansible.builtin.copy:
+    dest: /opt/animation/LISEZMOI.txt
+    mode: "0644"
+    content: |
+      Poste d'animation CityBot.
+      1. source /opt/animation/injects.env
+      2. Recuperer la liste des comptes depuis DB-CLIENTS :
+         scp localuser@{{ ip_db_clients }}:/opt/citybot/comptes_clients.csv /opt/animation/
+      3. Lancer les injects dans l'ordre (voir README du projet).
+      Tous les scripts sont inoffensifs (fausses donnees, chiffrement factice).

@@ -1,0 +1,5 @@
+---
+- name: restart tiers-editeur
+  ansible.builtin.systemd: { name: tiers-editeur, state: restarted, daemon_reload: true }
+- name: restart nginx
+  ansible.builtin.service: { name: nginx, state: restarted }

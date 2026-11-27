@@ -1,0 +1,23 @@
+[Unit]
+Description=CityBot - application de reservation
+After=network.target
+
+[Service]
+Type=simple
+User=citybot
+WorkingDirectory=/opt/citybot/app-resa
+Environment=DB_HOST={{ ip_db_clients }}
+Environment=DB_NAME={{ db_name }}
+Environment=DB_USER={{ db_user }}
+Environment=DB_PASS={{ db_pass }}
+# PAIEMENT_URL vide = prestataire hors perimetre (demo 4 machines).
+# Pour activer le vrai prestataire, mettre : https://{{ ip_tiers_paiement }}
+Environment=PAIEMENT_URL={{ paiement_url | default("") }}
+Environment=CITYBOT_LOG={{ citybot_log_dir }}/app-resa.json
+Environment=PYTHONWARNINGS=ignore:Unverified HTTPS request
+ExecStart=/opt/citybot/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 2 \
+          --access-logfile {{ citybot_log_dir }}/app-resa-access.log app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

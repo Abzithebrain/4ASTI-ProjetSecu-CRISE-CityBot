@@ -1,0 +1,50 @@
+---
+# Installation des services metier sur les 8 machines Linux du range CityBot.
+#   ansible-playbook site.yml
+#   ansible-playbook site.yml --limit flotte      (une zone)
+#   ansible-playbook site.yml --tags app_resa     (un service)
+
+- name: Socle commun a toutes les machines Linux
+  hosts: all
+  roles:
+    - { role: common, tags: [common] }
+
+- name: Base de donnees clients
+  hosts: db-clients
+  roles:
+    - { role: db_clients, tags: [db_clients] }
+
+- name: Faux prestataire de paiement
+  hosts: tiers-paiement
+  roles:
+    - { role: tiers_paiement, tags: [tiers_paiement] }
+
+- name: Editeur de cartographie
+  hosts: tiers-editeur
+  roles:
+    - { role: tiers_editeur, tags: [tiers_editeur] }
+
+- name: Application de reservation
+  hosts: app-resa
+  roles:
+    - { role: app_resa, tags: [app_resa] }
+
+- name: Serveur de telemetrie et d'ordres de mission
+  hosts: flotte-tlm
+  roles:
+    - { role: flotte_tlm, tags: [flotte_tlm] }
+
+- name: Vehicules simules
+  hosts: vehicules-sim
+  roles:
+    - { role: vehicules_sim, tags: [vehicules_sim] }
+
+- name: Serveur de sauvegardes
+  hosts: backup
+  roles:
+    - { role: backup, tags: [backup] }
+
+- name: Poste attaquant
+  hosts: kali
+  roles:
+    - { role: kali_attaquant, tags: [kali] }

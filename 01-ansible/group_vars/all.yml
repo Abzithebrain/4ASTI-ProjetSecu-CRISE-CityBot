@@ -1,0 +1,30 @@
+# Variables partagees par tous les services CityBot.
+# Toutes les donnees sont fictives : aucun secret reel ici.
+
+citybot_log_dir: /var/log/citybot
+
+# Base de donnees clients
+db_name: citybot
+db_user: citybot_app
+db_pass: "ResaApp2026!"            # compte applicatif (APP-RESA)
+db_admin_user: svc_admin           # compte "ex-administrateur" du scenario A
+db_admin_pass: "AdminFlotte2026!"
+db_backup_user: svc_backup
+db_backup_pass: "Backup2026!"
+
+# Jeu de donnees genere
+nb_clients: 500
+nb_courses: 3000
+
+# Cles API des vehicules (scenario B : la cle de VEH-002 est "volee")
+vehicule_api_keys:
+  VEH-001: "veh001-7f3a9c2e5b1d"
+  VEH-002: "veh002-4e8b1a6d9c3f"   # cle compromise en B6
+  VEH-003: "veh003-2c5d8f0a7b4e"
+
+# Cartographie
+navlib_version_saine: "1.4.2"
+navlib_version_piegee: "1.4.3"
+
+# Compte bancaire de test du beneficiaire frauduleux (scenario A / F3)
+iban_fraude: "FR7630001007941234567890185"

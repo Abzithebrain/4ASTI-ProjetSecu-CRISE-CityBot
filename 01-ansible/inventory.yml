@@ -1,0 +1,50 @@
+# =============================================================================
+# Inventaire du range CityBot - 8 machines Linux
+#
+# AVANT DE LANCER : remplacer RANGE_ID par le 2e octet de votre range.
+#   ludus range status    -> affiche le reseau 10.<RANGE_ID>.x.x
+#   sed -i 's/10\.2\./10.<votre_id>./g' inventory.yml
+#
+# Acces SSH : Ludus cree l'utilisateur localuser sur les VM Linux et depose
+# la cle de l'utilisateur Ludus. Verifier avec :
+#   ludus user creds get
+#   ssh localuser@10.2.20.11
+# Si la cle n'est pas celle par defaut, ajuster ansible_ssh_private_key_file.
+# =============================================================================
+all:
+  vars:
+    ansible_user: localuser
+    ansible_ssh_private_key_file: ~/.ssh/id_rsa
+    ansible_become: true
+    ansible_become_method: sudo
+
+    # Adresses utilisees par les services pour se parler entre eux.
+    ip_app_resa:       "10.2.20.11"
+    ip_db_clients:     "10.2.20.12"
+    ip_backup:         "10.2.20.13"
+    ip_flotte_tlm:     "10.2.30.11"
+    ip_vehicules_sim:  "10.2.30.12"
+    ip_tiers_editeur:  "10.2.40.11"
+    ip_tiers_paiement: "10.2.40.12"
+    ip_kali:           "10.2.99.11"
+
+    # VM permanente de supervision (hors range).
+    ip_elk: "10.2.0.50"   # A AJUSTER : adresse reelle de votre VM ELK
+
+  children:
+    applications:
+      hosts:
+        app-resa:   { ansible_host: "10.2.20.11" }
+        db-clients: { ansible_host: "10.2.20.12" }
+        backup:     { ansible_host: "10.2.20.13" }
+    flotte:
+      hosts:
+        flotte-tlm:    { ansible_host: "10.2.30.11" }
+        vehicules-sim: { ansible_host: "10.2.30.12" }
+    tiers:
+      hosts:
+        tiers-editeur:  { ansible_host: "10.2.40.11" }
+        tiers-paiement: { ansible_host: "10.2.40.12" }
+    externe:
+      hosts:
+        kali: { ansible_host: "10.2.99.11" }

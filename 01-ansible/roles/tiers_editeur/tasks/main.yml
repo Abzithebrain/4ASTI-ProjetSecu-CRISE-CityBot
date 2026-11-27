@@ -1,0 +1,85 @@
+---
+- name: Paquets
+  ansible.builtin.apt: { name: [nginx, python3-venv, openssl, tar], state: present, update_cache: true }
+
+- name: Utilisateur de service
+  ansible.builtin.user: { name: citybot, system: true, shell: /usr/sbin/nologin, create_home: false }
+
+- name: Repertoires
+  ansible.builtin.file: { path: "{{ item }}", state: directory, owner: citybot, mode: "0755" }
+  loop:
+    - /opt/citybot
+    - /opt/citybot/editeur
+    - /etc/ssl/citybot
+    - /srv/editeur
+    - /srv/editeur/src
+    - /srv/editeur/maps
+    - /srv/editeur/paquets
+
+- name: Environnement Python
+  ansible.builtin.pip:
+    name: [flask, gunicorn]
+    virtualenv: /opt/citybot/venv
+    virtualenv_command: "python3 -m venv"
+
+- name: Deposer le portail
+  ansible.builtin.copy: { src: editeur.py, dest: /opt/citybot/editeur/editeur.py, mode: "0644" }
+  notify: restart tiers-editeur
+
+- name: Deposer les sources navlib (saine et demo)
+  ansible.builtin.copy: { src: "{{ item.s }}", dest: "{{ item.d }}", mode: "0644" }
+  loop:
+    - { s: navlib_sain/route.py, d: /srv/editeur/src/route_sain.py }
+    - { s: navlib_demo/route.py, d: /srv/editeur/src/route_demo.py }
+
+- name: Deposer les scripts d'animation
+  ansible.builtin.copy: { src: "{{ item }}", dest: "/srv/editeur/{{ item }}", mode: "0755" }
+  loop: [empaqueter.sh, publier-maj-demo.sh, publier-sain.sh]
+
+- name: Construire les paquets et le manifeste initial
+  ansible.builtin.command: { cmd: /srv/editeur/empaqueter.sh, creates: /srv/editeur/maps/navlib-1.4.2.tar.gz }
+  register: emb
+
+- name: Empreintes des paquets
+  ansible.builtin.debug: { msg: "{{ emb.stdout_lines | default([]) }}" }
+
+- name: Certificat auto-signe
+  ansible.builtin.command:
+    cmd: >
+      openssl req -x509 -nodes -days 825 -newkey rsa:2048
+      -keyout /etc/ssl/citybot/editeur.key -out /etc/ssl/citybot/editeur.crt
+      -subj "/C=FR/O=NaviCarto SAS/CN=tiers-editeur.citybot.lab"
+    creates: /etc/ssl/citybot/editeur.crt
+
+- name: Fichier de journal
+  ansible.builtin.file: { path: "{{ citybot_log_dir }}/tiers-editeur.json", state: touch, owner: citybot, mode: "0644" }
+  changed_when: false
+
+- name: Service et vhost
+  ansible.builtin.template: { src: "{{ item.s }}", dest: "{{ item.d }}", mode: "0644" }
+  loop:
+    - { s: tiers-editeur.service.j2, d: /etc/systemd/system/tiers-editeur.service }
+    - { s: nginx-editeur.j2, d: /etc/nginx/sites-available/editeur }
+  notify: [restart tiers-editeur, restart nginx]
+
+- name: Activer le vhost
+  ansible.builtin.file: { src: /etc/nginx/sites-available/editeur, dest: /etc/nginx/sites-enabled/editeur, state: link }
+  notify: restart nginx
+
+- name: Retirer le site par defaut
+  ansible.builtin.file: { path: /etc/nginx/sites-enabled/default, state: absent }
+  notify: restart nginx
+
+- name: Demarrer
+  ansible.builtin.systemd: { name: "{{ item }}", state: started, enabled: true, daemon_reload: true }
+  loop: [tiers-editeur, nginx]
+
+- name: Verification
+  ansible.builtin.uri: { url: "https://127.0.0.1/maps/manifest.json", validate_certs: false }
+  register: v
+  retries: 5
+  delay: 3
+  until: v.status == 200
+
+- name: Manifeste servi
+  ansible.builtin.debug: { msg: "Editeur en ligne, version annoncee : {{ v.json.version }}" }

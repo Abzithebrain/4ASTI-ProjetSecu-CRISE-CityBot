@@ -1,0 +1,13 @@
+[Unit]
+Description=CityBot - portail editeur de cartographie
+After=network.target
+[Service]
+Type=simple
+User=citybot
+WorkingDirectory=/opt/citybot/editeur
+Environment=MAPS_DIR=/srv/editeur/maps
+Environment=CITYBOT_LOG={{ citybot_log_dir }}/tiers-editeur.json
+ExecStart=/opt/citybot/venv/bin/gunicorn --bind 127.0.0.1:8002 --workers 2 editeur:app
+Restart=always
+[Install]
+WantedBy=multi-user.target

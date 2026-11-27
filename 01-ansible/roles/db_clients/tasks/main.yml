@@ -1,0 +1,136 @@
+---
+- name: Installer PostgreSQL
+  ansible.builtin.apt:
+    name: [postgresql, postgresql-contrib, python3-psycopg2, acl]
+    state: present
+    update_cache: true
+
+- name: Trouver la version de PostgreSQL installee
+  ansible.builtin.shell: "ls /etc/postgresql | sort -n | tail -1"
+  register: pg_version
+  changed_when: false
+
+- name: Ecouter sur le reseau du range (et pas seulement en local)
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ pg_version.stdout }}/main/postgresql.conf"
+    regexp: "^#?listen_addresses"
+    line: "listen_addresses = '*'"
+  notify: restart postgresql
+
+# --- Journalisation : c'est la source de la detection de l'inject A4 ---------
+- name: Journalisation detaillee (connexions, requetes, duree)
+  ansible.builtin.blockinfile:
+    path: "/etc/postgresql/{{ pg_version.stdout }}/main/postgresql.conf"
+    marker: "# {mark} CITYBOT LOGGING"
+    block: |
+      logging_collector = on
+      log_destination = 'csvlog'
+      log_directory = 'log'
+      log_filename = 'postgresql-%Y-%m-%d.log'
+      log_rotation_age = 1d
+      log_connections = on
+      log_disconnections = on
+      log_statement = 'all'
+      log_min_duration_statement = 0
+      log_line_prefix = '%m [%p] %q%u@%d de %h '
+      log_temp_files = 0
+  notify: restart postgresql
+
+- name: Autorisations d'acces (pg_hba)
+  ansible.builtin.blockinfile:
+    path: "/etc/postgresql/{{ pg_version.stdout }}/main/pg_hba.conf"
+    marker: "# {mark} CITYBOT"
+    block: |
+      # Application de reservation
+      host  {{ db_name }}  {{ db_user }}         {{ ip_app_resa }}/32   scram-sha-256
+      # Sauvegardes
+      host  {{ db_name }}  {{ db_backup_user }}  {{ ip_backup }}/32     scram-sha-256
+      # Compte d'administration : volontairement ouvert a tout le range.
+      # C'est la faiblesse exploitee par l'inject A4 (export massif).
+      host  {{ db_name }}  {{ db_admin_user }}   0.0.0.0/0              scram-sha-256
+  notify: restart postgresql
+
+- name: Demarrer PostgreSQL
+  ansible.builtin.service: { name: postgresql, state: started, enabled: true }
+
+- name: Creer la base
+  become_user: postgres
+  community.postgresql.postgresql_db: { name: "{{ db_name }}", state: present }
+
+- name: Creer les comptes
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    db: "{{ db_name }}"
+    name: "{{ item.n }}"
+    password: "{{ item.p }}"
+    role_attr_flags: "{{ item.f }}"
+    state: present
+  loop:
+    - { n: "{{ db_user }}",        p: "{{ db_pass }}",        f: "NOSUPERUSER" }
+    - { n: "{{ db_admin_user }}",  p: "{{ db_admin_pass }}",  f: "SUPERUSER" }
+    - { n: "{{ db_backup_user }}", p: "{{ db_backup_pass }}", f: "NOSUPERUSER" }
+  no_log: true
+
+- name: Repertoire de travail CityBot
+  ansible.builtin.file: { path: /opt/citybot, state: directory, mode: "0750" }
+
+- name: Deposer le schema
+  ansible.builtin.copy: { src: schema.sql, dest: /opt/citybot/schema.sql, mode: "0644" }
+
+- name: Appliquer le schema
+  become_user: postgres
+  community.postgresql.postgresql_db:
+    name: "{{ db_name }}"
+    state: restore
+    target: /opt/citybot/schema.sql
+
+- name: Droits du compte applicatif
+  become_user: postgres
+  community.postgresql.postgresql_privs:
+    db: "{{ db_name }}"
+    role: "{{ db_user }}"
+    privs: SELECT,INSERT,UPDATE
+    objs: ALL_IN_SCHEMA
+    type: table
+
+- name: Droits de lecture du compte de sauvegarde
+  become_user: postgres
+  community.postgresql.postgresql_privs:
+    db: "{{ db_name }}"
+    role: "{{ db_backup_user }}"
+    privs: SELECT
+    objs: ALL_IN_SCHEMA
+    type: table
+
+- name: Droits sur les sequences
+  become_user: postgres
+  community.postgresql.postgresql_privs:
+    db: "{{ db_name }}"
+    role: "{{ db_user }}"
+    privs: USAGE,SELECT
+    objs: ALL_IN_SCHEMA
+    type: sequence
+
+- name: Deposer le script de peuplement
+  ansible.builtin.copy: { src: seed.py, dest: /opt/citybot/seed.py, mode: "0750" }
+
+- name: Peupler la base avec des donnees fictives
+  ansible.builtin.command: /usr/bin/python3 /opt/citybot/seed.py
+  environment:
+    DB_NAME: "{{ db_name }}"
+    DB_USER: "{{ db_admin_user }}"
+    DB_PASS: "{{ db_admin_pass }}"
+    NB_CLIENTS: "{{ nb_clients }}"
+    NB_COURSES: "{{ nb_courses }}"
+  register: seed_out
+  changed_when: "'Base peuplee' in seed_out.stdout"
+
+- name: Resultat du peuplement
+  ansible.builtin.debug: { msg: "{{ seed_out.stdout_lines }}" }
+
+- name: Lien des journaux PostgreSQL vers le repertoire collecte par ELK
+  ansible.builtin.file:
+    src: "/var/lib/postgresql/{{ pg_version.stdout }}/main/log"
+    dest: "{{ citybot_log_dir }}/postgresql"
+    state: link
+    force: true

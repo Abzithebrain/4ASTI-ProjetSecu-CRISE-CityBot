@@ -1,0 +1,5 @@
+---
+- name: restart vehicules
+  community.docker.docker_compose_v2:
+    project_src: /opt/citybot/flotte-sim
+    state: restarted

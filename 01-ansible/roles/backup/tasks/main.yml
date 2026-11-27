@@ -1,0 +1,69 @@
+---
+- name: Paquets (client postgres, audit, rsync)
+  ansible.builtin.apt:
+    name: [postgresql-client, auditd, rsync]
+    state: present
+    update_cache: true
+
+- name: auditd actif (traces d'acces aux sauvegardes pour l'inject A8)
+  ansible.builtin.service: { name: auditd, state: started, enabled: true }
+
+- name: Regle audit sur le repertoire des sauvegardes
+  ansible.builtin.copy:
+    dest: /etc/audit/rules.d/citybot-backup.rules
+    mode: "0640"
+    content: |
+      -w /srv/backup -p rwa -k citybot_backup
+      -w /opt/citybot -p wa -k citybot_backup
+  notify: reload auditd
+
+- name: Repertoires
+  ansible.builtin.file: { path: "{{ item }}", state: directory, mode: "0700" }
+  loop: [/srv/backup, /opt/citybot]
+
+- name: Variables d'environnement de sauvegarde
+  ansible.builtin.template: { src: backup.env.j2, dest: /opt/citybot/backup.env, mode: "0600" }
+
+- name: Scripts de sauvegarde et de restauration
+  ansible.builtin.copy: { src: "{{ item }}", dest: "/opt/citybot/{{ item }}", mode: "0750" }
+  loop: [sauvegarde.sh, restaurer.sh]
+
+- name: Service et timer de sauvegarde
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.n }}"
+    mode: "0644"
+    content: "{{ item.c }}"
+  loop:
+    - n: citybot-backup.service
+      c: |
+        [Unit]
+        Description=Sauvegarde CityBot
+        [Service]
+        Type=oneshot
+        EnvironmentFile=/opt/citybot/backup.env
+        ExecStart=/opt/citybot/sauvegarde.sh
+    - n: citybot-backup.timer
+      c: |
+        [Unit]
+        Description=Sauvegarde CityBot toutes les heures
+        [Timer]
+        OnCalendar=hourly
+        Persistent=true
+        [Install]
+        WantedBy=timers.target
+
+- name: Activer le timer
+  ansible.builtin.systemd: { name: citybot-backup.timer, state: started, enabled: true, daemon_reload: true }
+
+- name: Premiere sauvegarde immediate
+  ansible.builtin.command: /opt/citybot/sauvegarde.sh
+  environment:
+    IP_DB: "{{ ip_db_clients }}"
+    DB_NAME: "{{ db_name }}"
+    DB_BACKUP_USER: "{{ db_backup_user }}"
+    DB_BACKUP_PASS: "{{ db_backup_pass }}"
+  register: bk
+  changed_when: true
+
+- name: Resultat
+  ansible.builtin.debug: { msg: "Sauvegarde initiale effectuee sur BACKUP" }

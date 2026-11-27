@@ -1,0 +1,15 @@
+[Unit]
+Description=CityBot - faux prestataire de paiement
+After=network.target
+
+[Service]
+Type=simple
+User=citybot
+WorkingDirectory=/opt/citybot/paiement
+Environment=PAIEMENT_DB=/opt/citybot/paiement.sqlite
+Environment=CITYBOT_LOG={{ citybot_log_dir }}/tiers-paiement.json
+ExecStart=/opt/citybot/venv/bin/gunicorn --bind 127.0.0.1:8001 --workers 2 paiement:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+# Trois vehicules simules. Chacun a son identifiant et sa cle API.
+# La cle de VEH-002 est celle reutilisee par l'inject B6.
+services:
+{% for vid, cle in vehicule_api_keys.items() %}
+  {{ vid | lower }}:
+    build: ./vehicule
+    container_name: {{ vid | lower }}
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      VEHICULE_ID: "{{ vid }}"
+      CLE_API: "{{ cle }}"
+      FLOTTE_URL: "http://{{ ip_flotte_tlm }}:8080"
+      EDITEUR_URL: "https://{{ ip_tiers_editeur }}"
+      INTERVALLE: "5"
+      # NAVLIB_PING est injecte par la navlib de demo au moment de l'inject B3.
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+{% endfor %}

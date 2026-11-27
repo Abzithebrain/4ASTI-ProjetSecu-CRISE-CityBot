@@ -1,0 +1,31 @@
+# Front HTTPS de l'application de reservation (flux "Reservation" du dossier).
+log_format citybot_json escape=json '{'
+  '"@timestamp":"$time_iso8601",'
+  '"source":{"ip":"$remote_addr"},'
+  '"url":{"path":"$request_uri"},'
+  '"http":{"request":{"method":"$request_method"},'
+          '"response":{"status_code":$status,"bytes":$body_bytes_sent}},'
+  '"user_agent":{"original":"$http_user_agent"},'
+  '"service":{"name":"app-resa-nginx"}}';
+
+server {
+    listen 443 ssl;
+    server_name app-resa.citybot.lab;
+
+    ssl_certificate     /etc/ssl/citybot/app-resa.crt;
+    ssl_certificate_key /etc/ssl/citybot/app-resa.key;
+
+    access_log {{ citybot_log_dir }}/app-resa-nginx.json citybot_json;
+    error_log  {{ citybot_log_dir }}/app-resa-nginx-error.log;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+}
+server {
+    listen 80;
+    server_name app-resa.citybot.lab;
+    return 301 https://$host$request_uri;
+}
