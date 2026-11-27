@@ -53,6 +53,21 @@
 - name: Demarrer PostgreSQL
   ansible.builtin.service: { name: postgresql, state: started, enabled: true }
 
+# listen_addresses ne prend effet qu'au RESTART (un reload ne suffit pas). Si le
+# handler n'a pas tourne -- role relance, ou play interrompu avant le flush des
+# handlers -- la conf sur disque est bonne mais le process ecoute encore en local.
+# On verifie l'etat reel et on force le restart au besoin : idempotent, auto-reparant.
+- name: Verifier que PostgreSQL ecoute sur le reseau du range
+  ansible.builtin.shell: >
+    ss -H -tln 'sport = :5432' | grep -qE '0\.0\.0\.0:5432|\*:5432'
+  register: pg_ecoute_reseau
+  changed_when: false
+  failed_when: false
+
+- name: Forcer le redemarrage si PostgreSQL n'ecoute que sur localhost
+  ansible.builtin.service: { name: postgresql, state: restarted }
+  when: pg_ecoute_reseau.rc != 0
+
 - name: Creer la base
   become_user: postgres
   community.postgresql.postgresql_db: { name: "{{ db_name }}", state: present }
